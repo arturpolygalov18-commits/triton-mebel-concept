@@ -1,31 +1,29 @@
+
 const menu=document.querySelector('.menu-toggle'),nav=document.querySelector('.nav'),furnitureMenu=document.querySelector('.furniture-menu');
 function closeMenu(){nav.classList.remove('open');menu.setAttribute('aria-expanded','false');furnitureMenu.open=false}
 menu.addEventListener('click',()=>{const open=menu.getAttribute('aria-expanded')!=='true';menu.setAttribute('aria-expanded',String(open));nav.classList.toggle('open',open)});
 nav.addEventListener('click',e=>{if(e.target.closest('a'))closeMenu()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu()});
 document.addEventListener('click',e=>{if(!e.target.closest('.header'))closeMenu()});
-const photo=document.querySelector('#detail-image'),caption=document.querySelector('.detail-caption'),stage=document.querySelector('.detail-stage'),incoming=document.querySelector('.detail-incoming'),detailButtons=[...document.querySelectorAll('.detail')],reduceMotion=matchMedia('(prefers-reduced-motion: reduce)');
-let detailRequest=0,detailAnimation=null,displayedButton=detailButtons[0],pendingButton=null;
-function stopTransition(){if(detailAnimation){detailAnimation.cancel();detailAnimation=null}incoming.style.opacity='0';incoming.style.transform='none'}
-function commitDetail(button){photo.src=button.dataset.src;photo.alt=button.dataset.alt;photo.style.objectPosition=button.dataset.position;caption.textContent=button.dataset.title;displayedButton=button}
-function selectDetail(button){detailButtons.forEach(b=>b.setAttribute('aria-pressed',String(b===button)))}
-detailButtons.forEach(button=>button.addEventListener('click',async event=>{
- if(button===pendingButton||button===displayedButton&&!pendingButton)return;
- const request=++detailRequest;pendingButton=button;selectDetail(button);stage.setAttribute('aria-busy','true');
- try{
-  const ready=new Image();ready.src=button.dataset.src;await ready.decode();
-  if(request!==detailRequest)return;
-  stopTransition();
-  if(reduceMotion.matches||event.detail===0){commitDetail(button);pendingButton=null;stage.setAttribute('aria-busy','false');return}
-  incoming.src=button.dataset.src;incoming.style.objectPosition=button.dataset.position;
-  const animation=incoming.animate([{opacity:0,transform:'scale(1.035)'},{opacity:1,transform:'scale(1)'}],{duration:280,easing:'cubic-bezier(.215,.61,.355,1)',fill:'forwards'});detailAnimation=animation;
-  await animation.finished;
-  if(request!==detailRequest)return;
-  commitDetail(button);stopTransition();pendingButton=null;stage.setAttribute('aria-busy','false');
- }catch(error){if(request!==detailRequest)return;stopTransition();pendingButton=null;selectDetail(displayedButton);stage.setAttribute('aria-busy','false');caption.textContent='Не удалось открыть фото. Попробуйте ещё раз.'}
-}));
-reduceMotion.addEventListener('change',()=>{if(reduceMotion.matches&&pendingButton&&detailAnimation){++detailRequest;const target=pendingButton;stopTransition();commitDetail(target);pendingButton=null;selectDetail(target);stage.setAttribute('aria-busy','false')}});
-const track=document.querySelector('.projects'),arrows=document.querySelector('.arrows'),prev=document.querySelector('.prev'),next=document.querySelector('.next');
-function controls(){arrows.hidden=track.scrollWidth<=track.clientWidth+2;prev.disabled=track.scrollLeft<=2;next.disabled=track.scrollLeft+track.clientWidth>=track.scrollWidth-2}
-document.querySelectorAll('.arrow').forEach(b=>b.addEventListener('click',()=>{const step=track.querySelector('.project').getBoundingClientRect().width+parseFloat(getComputedStyle(track).columnGap);track.scrollBy({left:(b===prev?-1:1)*step,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'})}));
-track.addEventListener('scroll',controls,{passive:true});window.addEventListener('resize',controls);controls();
+const track=document.querySelector('.case-photo-track'),arrows=document.querySelector('.gallery-arrows'),prev=document.querySelector('.gallery-prev'),next=document.querySelector('.gallery-next');
+let requestedGalleryStop=null;
+function galleryStops(){const cards=[...track.querySelectorAll('.case-photo')],max=Math.max(0,track.scrollWidth-track.clientWidth);if(!cards.length)return [0];const first=cards[0].getBoundingClientRect().left;const values=[0,...cards.map(card=>Math.max(0,Math.min(max,card.getBoundingClientRect().left-first))),max].sort((a,b)=>a-b);return values.filter((value,index)=>index===0||value-values[index-1]>1)}
+function updateGalleryControls(){const max=Math.max(0,track.scrollWidth-track.clientWidth),position=requestedGalleryStop??track.scrollLeft;arrows.hidden=max<=2;prev.disabled=position<=1;next.disabled=position>=max-1}
+function scrollGalleryTo(left,behavior){requestedGalleryStop=left;track.scrollTo({left,behavior});if(Math.abs(track.scrollLeft-left)<=1)requestedGalleryStop=null;updateGalleryControls()}
+arrows.addEventListener('click',e=>{const button=e.target.closest('button');if(!button||button.disabled)return;const position=requestedGalleryStop??track.scrollLeft,stops=galleryStops();const target=button===next?stops.find(stop=>stop>position+1):[...stops].reverse().find(stop=>stop<position-1);if(target===undefined)return;scrollGalleryTo(target,matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth')});
+track.addEventListener('scroll',()=>{if(requestedGalleryStop!==null&&Math.abs(track.scrollLeft-requestedGalleryStop)<=1)requestedGalleryStop=null;updateGalleryControls()},{passive:true});
+track.addEventListener('scrollend',()=>{requestedGalleryStop=null;updateGalleryControls()});
+for(const event of ['pointerdown','touchstart','wheel'])track.addEventListener(event,()=>{requestedGalleryStop=null;updateGalleryControls()},{passive:true});
+track.addEventListener('focusin',event=>{const card=event.target.closest('.case-photo');if(!card)return;const frame=track.getBoundingClientRect(),photo=card.getBoundingClientRect();if(photo.left>=frame.left-1&&photo.right<=frame.left+track.clientWidth+1)return;const first=track.querySelector('.case-photo').getBoundingClientRect().left,left=photo.left-first,right=left+photo.width;const candidates=galleryStops().filter(stop=>left>=stop-1&&right<=stop+track.clientWidth+1);if(candidates.length)scrollGalleryTo(candidates.reduce((a,b)=>Math.abs(a-track.scrollLeft)<Math.abs(b-track.scrollLeft)?a:b),'auto')});
+window.addEventListener('resize',()=>{requestedGalleryStop=null;const stops=galleryStops(),target=stops.reduce((a,b)=>Math.abs(a-track.scrollLeft)<Math.abs(b-track.scrollLeft)?a:b);scrollGalleryTo(target,'auto')});updateGalleryControls();
+const photos=[{"src": "assets/image-13.webp", "title": "Общий вид острова", "description": "Место для завтрака со стороны комнаты, мойка со стороны кухни."}, {"src": "assets/image-14.webp", "title": "Остров и основной гарнитур", "description": "Мойка, варочная поверхность и техника в одном пространстве."}, {"src": "assets/image-15.webp", "title": "Подсветка рабочей зоны", "description": "Древесный декор верхних шкафов и свет над столешницей."}, {"src": "assets/image-16.webp", "title": "Фасады и колонна", "description": "Сочетание тёмно-зелёного цвета и отделки под дерево."}, {"src": "assets/image-17.webp", "title": "Мойка в острове", "description": "Крупный план мойки и расположения встроенной техники."}, {"src": "assets/image-18.webp", "title": "Рабочая поверхность", "description": "Плита у стены, подсветка и зелёные нижние фасады."}, {"src": "assets/image-19.webp", "title": "Выдвижной ящик Blum", "description": "Внутреннее исполнение показанного ящика крупным планом."}];
+const viewer=document.querySelector('.photo-viewer'),viewerImage=document.querySelector('.viewer-image'),viewerCounter=document.querySelector('.viewer-counter'),viewerTitle=document.querySelector('.viewer-caption strong'),viewerDescription=document.querySelector('.viewer-caption p'),viewerPrev=document.querySelector('.viewer-prev'),viewerNext=document.querySelector('.viewer-next');
+let photoIndex=0,lastPhotoTrigger=null,originalOverflow='';
+function showPhoto(index){if(index<0||index>=photos.length)return;photoIndex=index;const photo=photos[index];viewerImage.src=photo.src;viewerImage.alt=photo.title+' той же зелёной кухни';viewerCounter.textContent=(index+1)+' / '+photos.length;viewerTitle.textContent=photo.title;viewerDescription.textContent=photo.description;viewerDescription.classList.remove('viewer-error');viewerPrev.disabled=index===0;viewerNext.disabled=index===photos.length-1}
+function openPhoto(trigger){const index=Number(trigger.dataset.photo);if(!Number.isInteger(index)||index<0||index>=photos.length)return;lastPhotoTrigger=trigger;showPhoto(index);if(!viewer.open){originalOverflow=document.body.style.overflow;viewer.showModal();document.body.style.overflow='hidden'}}
+document.querySelectorAll('[data-photo]').forEach(button=>button.addEventListener('click',()=>openPhoto(button)));
+document.querySelector('.viewer-close').addEventListener('click',()=>viewer.close());
+viewerPrev.addEventListener('click',()=>showPhoto(photoIndex-1));viewerNext.addEventListener('click',()=>showPhoto(photoIndex+1));
+viewer.addEventListener('keydown',e=>{if(e.altKey||e.ctrlKey||e.metaKey)return;if(e.key==='ArrowLeft'){e.preventDefault();showPhoto(photoIndex-1)}if(e.key==='ArrowRight'){e.preventDefault();showPhoto(photoIndex+1)}});
+viewer.addEventListener('close',()=>{document.body.style.overflow=originalOverflow;if(lastPhotoTrigger?.isConnected)lastPhotoTrigger.focus({preventScroll:true})});
+viewerImage.addEventListener('error',()=>{viewerDescription.textContent='Не удалось загрузить фотографию. Откройте соседний кадр или попробуйте ещё раз.';viewerDescription.classList.add('viewer-error')});
